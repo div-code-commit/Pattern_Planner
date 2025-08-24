@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pattern Planner</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- html2canvas for saving the grid as an image -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useRef, useEffect } = React;
+      const { createRoot } = ReactDOM;
+
+      // --- Homepage Component ---
+      const HomePage = ({ onLaunch }) => (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+          <div className="bg-gray-800 p-8 sm:p-12 rounded-3xl shadow-2xl text-center max-w-lg mx-auto">
+            <h1 className="text-4xl sm:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 mb-4 animate-pulse">
+              Pattern Planner
+            </h1>
+            <p className="text-lg text-gray-400 mb-8 max-w-md">
+              Visualize and create beautiful tile patterns with ease.
+            </p>
+            <button
+              onClick={onLaunch}
+              className="px-8 py-4 text-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+            >
+              Launch Editor
+            </button>
+          </div>
+          <div className="mt-auto pt-4 border-t border-gray-700 text-sm text-gray-500 text-center w-full max-w-lg">
+            <p>Made by Divyansh with ❤️</p>
+            <a href="mailto:ddivyanshsrivastava@gmail.com">
+              <button className="px-4 py-2 text-l bg-green-600 hover:bg-indigo-700 text-white font-bold rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800">
+                Contact me
+              </button>
+            </a>
+          </div>
+        </div>
+      );
+
+      // --- Main Editor Component ---
+      const MainEditor = ({ onNavigateHome }) => {
+        const [trayImages, setTrayImages] = useState([]);
+        const [gridLayout, setGridLayout] = useState(
+          Array.from({ length: 36 }, (_, i) => ({
+            id: `tile-${i}`,
+            image: null,
+            rotation: 0,
+            mirrored: false,
+            selected: false,
+          }))
+        );
+        const [columns] = useState(6);
+        const [ratioInput, setRatioInput] = useState("1/1");
+        const [isSaving, setIsSaving] = useState(false);
+        const fileInputRef = useRef(null);
+        const gridRef = useRef(null);
+
+        const handleImageSelect = (event) => {
+          const files = event.target.files;
+          if (files.length > 0) {
+            const newImages = [];
+            const promises = [];
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const reader = new FileReader();
+              promises.push(
+                new Promise((resolve) => {
+                  reader.onloadend = () => {
+                    newImages.push({
+                      id: Date.now() + Math.random(),
+                      url: reader.result,
+                    });
+                    resolve();
+                  };
+                  reader.readAsDataURL(file);
+                })
+              );
+            }
+            Promise.all(promises).then(() => {
+              setTrayImages((prevImages) => [...prevImages, ...newImages]);
+            });
+          }
+        };
+
+        const handleTileClick = (tileId) => {
+          setGridLayout((prevLayout) =>
+            prevLayout.map((tile) =>
+              tile.id === tileId ? { ...tile, selected: !tile.selected } : tile
+            )
+          );
+        };
+
+        const handleTrayImageClick = (image) => {
+          const hasSelectedTiles = gridLayout.some((tile) => tile.selected);
+          if (!hasSelectedTiles) return;
+
+          setGridLayout((prevLayout) =>
+            prevLayout.map((tile) => {
+              if (tile.selected) {
+                return {
+                  ...tile,
+                  image: image,
+                  selected: false,
+                  rotation: 0,
+                  mirrored: false,
+                };
+              }
+              return tile;
+            })
+          );
+        };
+
+        const handleRotate = (tileId) => {
+          setGridLayout((prevLayout) =>
+            prevLayout.map((tile) => {
+              if (tile.id === tileId) {
+                const newRotation = (tile.rotation + 90) % 360;
+                return { ...tile, rotation: newRotation };
+              }
+              return tile;
+            })
+          );
+        };
+
+        const handleMirror = (tileId) => {
+          setGridLayout((prevLayout) =>
+            prevLayout.map((tile) => {
+              if (tile.id === tileId) {
+                return { ...tile, mirrored: !tile.mirrored };
+              }
+              return tile;
+            })
+          );
+        };
+
+        const handleClearTile = (tileId) => {
+          setGridLayout((prevLayout) =>
+            prevLayout.map((tile) => {
+              if (tile.id === tileId) {
+                return {
+                  ...tile,
+                  image: null,
+                  rotation: 0,
+                  mirrored: false,
+                  selected: false,
+                };
+              }
+              return tile;
+            })
+          );
+        };
+
+        const handleClearGrid = () => {
+          setGridLayout(
+            Array.from({ length: 36 }, (_, i) => ({
+              id: `tile-${i}`,
+              image: null,
+              rotation: 0,
+              mirrored: false,
+              selected: false,
+            }))
+          );
+        };
+
+        const handleSaveLayout = () => {
+          setIsSaving(true);
+          if (gridRef.current) {
+            html2canvas(gridRef.current, {
+              allowTaint: true,
+              useCORS: true,
+            })
+              .then((canvas) => {
+                const image = canvas.toDataURL("image/png");
+                const link = document.createElement("a");
+                link.href = image;
+                link.download = "tile-layout.png";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setIsSaving(false);
+              })
+              .catch((error) => {
+                console.error("Error saving the layout:", error);
+                setIsSaving(false);
+              });
+          } else {
+            setIsSaving(false);
+          }
+        };
+
+        return (
+          <div className="min-h-[100dvh] bg-gray-900 text-white font-sans flex flex-col md:flex-row p-4 sm:p-8">
+            {/* --- Image Tray Section (Left Side) --- */}
+            <div className="md:w-1/3 flex-shrink-0 bg-gray-800 p-6 rounded-xl shadow-lg mb-6 md:mb-0 md:mr-6 flex flex-col items-center">
+              <h2 className="text-2xl font-bold text-gray-200 mb-4">
+                Image Tray
+              </h2>
+
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageSelect}
+                ref={fileInputRef}
+                className="hidden"
+              />
+
+              <button
+                onClick={() => fileInputRef.current.click()}
+                className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800 mb-4"
+              >
+                Add Images
+              </button>
+
+              <div className="flex flex-wrap justify-center gap-4 p-4 overflow-y-auto max-h-[50vh] md:max-h-96">
+                {trayImages.length > 0 ? (
+                  trayImages.map((image) => (
+                    <div
+                      key={image.id}
+                      onClick={() => handleTrayImageClick(image)}
+                      className={`w-24 h-24 bg-gray-700 rounded-lg overflow-hidden shadow-md cursor-pointer transition-transform duration-200 transform hover:scale-105`}
+                    >
+                      <img
+                        src={image.url}
+                        alt="Tray Image"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-center">
+                    Your images will appear here.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* --- Layout Grid Section (Right Side) --- */}
+            <div className="md:w-2/3 flex-grow bg-gray-800 p-6 rounded-xl shadow-lg">
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-200">
+                  Layout Grid
+                </h2>
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 sm:mt-0">
+                  <button
+                    onClick={handleClearGrid}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full shadow-lg transition duration-300 transform hover:scale-105"
+                  >
+                    Clear Grid
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="aspect-ratio"
+                      className="text-gray-300 whitespace-nowrap"
+                    >
+                      Tile Ratio (W/H in inches):
+                    </label>
+                    <input
+                      id="aspect-ratio"
+                      type="text"
+                      value={ratioInput}
+                      onChange={(e) => setRatioInput(e.target.value)}
+                      className="w-24 bg-gray-700 text-white rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g., 12/24"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                ref={gridRef}
+                className="grid gap-0 bg-gray-700 rounded-lg"
+                style={{
+                  gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                }}
+              >
+                {gridLayout.map((tile, index) => (
+                  <div
+                    key={tile.id}
+                    onClick={() => handleTileClick(tile.id)}
+                    className={`relative group aspect-[${ratioInput.replace(
+                      "/",
+                      "/"
+                    )}] flex items-center justify-center overflow-hidden transition-all duration-200 transform hover:scale-105 ${
+                      tile.selected ? "border-4 border-green-500" : ""
+                    }`}
+                  >
+                    {tile.image ? (
+                      <>
+                        <img
+                          src={tile.image.url}
+                          alt={`Grid item`}
+                          className={`w-full h-full object-cover transition-transform duration-300`}
+                          style={{
+                            transform: `rotate(${tile.rotation}deg) scaleX(${
+                              tile.mirrored ? -1 : 1
+                            })`,
+                          }}
+                        />
+                        {/* Controls to rotate, mirror, and clear */}
+                        <div className="absolute top-1 right-1 flex space-x-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRotate(tile.id);
+                            }}
+                            className="p-1 text-white bg-gray-800 bg-opacity-70 rounded-full hover:bg-opacity-90 transition-all"
+                            title="Rotate"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="lucide lucide-rotate-cw"
+                            >
+                              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                              <path d="M21 3v5h-5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMirror(tile.id);
+                            }}
+                            className="p-1 text-white bg-gray-800 bg-opacity-70 rounded-full hover:bg-opacity-90 transition-all"
+                            title="Mirror"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="lucide lucide-scale-x"
+                            >
+                              <path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9" />
+                              <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearTile(tile.id);
+                            }}
+                            className="p-1 text-white bg-gray-800 bg-opacity-70 rounded-full hover:bg-opacity-90 transition-all"
+                            title="Clear Tile"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="lucide lucide-x"
+                            >
+                              <path d="M18 6 6 18" />
+                              <path d="m6 6 12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        className={`flex flex-col items-center justify-center w-full h-full space-y-2`}
+                      >
+                        <span className="text-gray-500 text-sm">
+                          Click to select
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row mt-6 w-full space-y-4 sm:space-y-0 sm:space-x-4">
+                <button
+                  onClick={handleSaveLayout}
+                  disabled={isSaving}
+                  className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full shadow-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? "Saving..." : "Save Layout"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Main App Parent Component ---
+      const App = () => {
+        const [view, setView] = useState("home");
+
+        const handleLaunchEditor = () => {
+          setView("editor");
+        };
+
+        return (
+          <div className="min-h-screen">
+            {view === "home" ? (
+              <HomePage onLaunch={handleLaunchEditor} />
+            ) : (
+              <MainEditor />
+            )}
+          </div>
+        );
+      };
+
+      const container = document.getElementById("root");
+      const root = createRoot(container);
+      root.render(<App />);
+    </script>
+  </body>
+</html>
